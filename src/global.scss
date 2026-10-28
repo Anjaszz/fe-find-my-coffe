@@ -25,13 +25,164 @@
 @import "@ionic/angular/css/text-transformation.css";
 @import "@ionic/angular/css/flex-utils.css";
 
-/**
- * Ionic Dark Mode
- * -----------------------------------------------------
- * For more info, please see:
- * https://ionicframework.com/docs/theming/dark-mode
- */
+/* Leaflet CSS */
+@import "leaflet/dist/leaflet.css";
 
-/* @import "@ionic/angular/css/palettes/dark.always.css"; */
-/* @import "@ionic/angular/css/palettes/dark.class.css"; */
-@import '@ionic/angular/css/palettes/dark.system.css';
+:root {
+  --ion-font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --ion-color-primary: #8b3a0f;
+  --ion-color-primary-rgb: 139, 58, 15;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-shade: #7a330d;
+  --ion-color-primary-tint: #974e27;
+
+  --coffee-kenangan: #8b0000;
+  --coffee-tuku: #6f4e37;
+  --coffee-fore: #005a36;
+  --coffee-tomoro: #f25c05;
+  --coffee-janjijiwa: #4a152b;
+  --coffee-point: #027a75;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Leaflet Custom Overrides */
+.leaflet-container {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  color: #2c2724 !important;
+  background-color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 18px !important;
+  border-bottom: 1px solid #f0eee9 !important;
+  transition: background 0.2s ease;
+}
+
+.leaflet-control-zoom-in:hover,
+.leaflet-control-zoom-out:hover {
+  background-color: #f7f5f2 !important;
+}
+
+/* User Location Pulsing Dot */
+.user-location-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.user-location-marker .pulse-circle {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(33, 150, 243, 0.25);
+  position: absolute;
+  animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+.user-location-marker .dot-inner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1976d2;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Coffee Shop Custom Marker Pin */
+.coffee-marker-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.coffee-marker-pin:hover,
+.coffee-marker-pin.is-active {
+  transform: translateY(-6px) scale(1.12);
+  z-index: 1000 !important;
+}
+
+.coffee-pin-body {
+  padding: 5px 10px;
+  border-radius: 20px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+  border: 2px solid #ffffff;
+}
+
+.coffee-pin-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #ffffff;
+  padding: 1px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  display: block;
+}
+
+.coffee-pin-pointer {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid;
+  margin-top: -1px;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15));
+}
+
+/* Custom scrollbars for chips */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

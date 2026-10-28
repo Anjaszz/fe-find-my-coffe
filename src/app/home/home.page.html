@@ -1,20 +1,561 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>
-      Blank
-    </ion-title>
-  </ion-toolbar>
-</ion-header>
+<ion-content [fullscreen]="true" class="main-content">
+  <!-- Top Floating Header (Google Maps Style) -->
+  <div class="top-floating-header">
+    <div class="search-box-card">
+      <div class="brand-app-tag">
+        <div class="app-logo-icon">
+          <img src="/assets/images/iced_coffee.jpg" alt="logo">
+        </div>
+        <div class="app-title-wrap">
+          <span class="app-name">FindMyCoffee</span>
+          <span class="app-subtitle" *ngIf="isLoading">⏳ Memuat dari Supabase...</span>
+          <span class="app-subtitle" *ngIf="!isLoading">🟢 {{ displayedShops.length }} outlet terdekat</span>
+        </div>
+      </div>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
-    </ion-toolbar>
-  </ion-header>
+      <!-- View Toggle (Peta vs Daftar) -->
+      <div class="view-switch-row">
+        <button
+          class="view-pill-btn"
+          [class.is-active]="activeView === 'map'"
+          (click)="toggleView('map')"
+        >
+          <ion-icon name="map-outline"></ion-icon>
+          <span>Peta</span>
+        </button>
+        <button
+          class="view-pill-btn"
+          [class.is-active]="activeView === 'list'"
+          (click)="toggleView('list')"
+        >
+          <ion-icon name="list-outline"></ion-icon>
+          <span>Daftar</span>
+        </button>
+      </div>
+    </div>
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
+    <!-- Double Filter Section -->
+    <div class="filter-section-container">
+      <!-- Row 1: Brand Filters -->
+      <div class="chips-scroll-container brand-chips-row no-scrollbar">
+        <div
+          *ngFor="let filter of brandFilters"
+          class="chip-item brand-chip"
+          [class.chip-selected]="selectedBrand === filter.id"
+          (click)="setBrandFilter(filter.id)"
+        >
+          <img
+            *ngIf="filter.logo"
+            [src]="filter.logo"
+            [alt]="filter.label"
+            class="chip-brand-logo"
+          />
+          <ion-icon *ngIf="filter.icon" [name]="filter.icon" class="chip-icon"></ion-icon>
+          <span class="chip-text">{{ filter.label }}</span>
+        </div>
+      </div>
+
+      <!-- Row 2: Secondary / Quick Filters (Terdekat, 24 Jam, Buka Sekarang, Rating, Promo) -->
+      <div class="chips-scroll-container criteria-chips-row no-scrollbar">
+        <div
+          *ngFor="let filter of quickFilters"
+          class="chip-item criteria-chip"
+          [class.chip-selected]="selectedQuickFilter === filter.id"
+          (click)="setQuickFilter(filter.id)"
+        >
+          <ion-icon [name]="filter.icon" class="chip-icon"></ion-icon>
+          <span class="chip-text">{{ filter.label }}</span>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- MAP VIEW -->
+  <div class="map-view-wrapper" [class.hidden-view]="activeView !== 'map'">
+    <!-- Leaflet Map Container -->
+    <div #mapContainer class="leaflet-map-canvas"></div>
+
+    <!-- Map Floating Action Buttons (Right Side) -->
+    <div class="map-controls-floating" [class.has-sheet]="!!selectedShop">
+      <!-- GPS Location Button -->
+      <button
+        class="floating-circle-btn gps-btn"
+        [class.is-loading]="isLocating"
+        (click)="requestUserLocation(true)"
+        title="Pusatkan ke lokasi saya"
+      >
+        <ion-icon name="locate-outline" *ngIf="!isLocating"></ion-icon>
+        <div class="mini-spinner" *ngIf="isLocating"></div>
+      </button>
+
+      <!-- Zoom In & Out -->
+      <div class="zoom-btn-group">
+        <button class="zoom-btn" (click)="zoomIn()" title="Perbesar">
+          +
+        </button>
+        <div class="zoom-divider"></div>
+        <button class="zoom-btn" (click)="zoomOut()" title="Perkecil">
+          −
+        </button>
+      </div>
+    </div>
+
+    <!-- Selected Shop Bottom Sheet (When a pin is clicked) -->
+    <div class="bottom-sheet-preview" *ngIf="selectedShop">
+      <div class="sheet-drag-handle" (click)="selectedShop = null"></div>
+
+      <div class="sheet-card-content">
+        <!-- Close button -->
+        <button class="sheet-close-btn" (click)="selectedShop = null">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+
+        <div class="sheet-top-meta">
+          <div
+            class="brand-badge-pill"
+            [style.background-color]="selectedShop.brandColor"
+            [style.color]="selectedShop.brandTextColor"
+          >
+            <img [src]="getBrandLogo(selectedShop.brand)" [alt]="selectedShop.brandLabel" class="badge-brand-logo" />
+            <span>{{ selectedShop.brandLabel }}</span>
+          </div>
+
+          <div class="distance-live-tag">
+            <span class="dist-dot"></span>
+            <strong>{{ selectedShop.distanceText }}</strong>
+            <span class="eta-text">• {{ selectedShop.walkingTimeText }}</span>
+          </div>
+        </div>
+
+        <div class="shop-main-info-row">
+          <div class="shop-text-col">
+            <h2 class="shop-name-title">{{ selectedShop.name }}</h2>
+            <p class="shop-address-text">{{ selectedShop.address }}</p>
+
+            <div class="rating-price-row">
+              <div class="star-rating-box">
+                <ion-icon name="star" class="star-gold"></ion-icon>
+                <span class="rating-number">{{ selectedShop.rating }}</span>
+                <span class="reviews-count">({{ selectedShop.reviewsCount | number }} ulasan)</span>
+              </div>
+              <span class="dot-separator">•</span>
+              <span class="price-range-badge">{{ selectedShop.priceRange }}</span>
+            </div>
+
+            <!-- Jam Buka & Telepon Real dari Google Maps -->
+            <div class="sheet-hours-row" *ngIf="selectedShop.openHours">
+              <span class="status-dot-indicator" [class.is-open]="selectedShop.isOpen"></span>
+              <span class="hours-badge-text">⏰ {{ selectedShop.openHours }}</span>
+              <span *ngIf="selectedShop.phone" class="phone-badge-text">• 📞 {{ selectedShop.phone }}</span>
+            </div>
+          </div>
+
+          <img
+            [src]="selectedShop.image"
+            alt="{{ selectedShop.name }}"
+            class="sheet-shop-thumb"
+            (click)="openDetailModal(selectedShop)"
+          />
+        </div>
+
+        <!-- Promo Banner if available -->
+        <div class="sheet-promo-box" *ngIf="selectedShop.promo">
+          <ion-icon name="sparkles-outline"></ion-icon>
+          <span>{{ selectedShop.promo }}</span>
+        </div>
+
+        <!-- Signatures & Facilities chips -->
+        <div class="quick-tags-row no-scrollbar">
+          <span
+            *ngFor="let sig of selectedShop.signatures"
+            class="signature-mini-tag"
+          >
+            ⭐ {{ sig }}
+          </span>
+          <span *ngIf="selectedShop.amenities.wifi" class="facility-mini-tag">
+            📶 WiFi {{ selectedShop.amenities.wifiSpeed || '' }}
+          </span>
+          <span *ngIf="selectedShop.amenities.sockets" class="facility-mini-tag">
+            🔌 Stopkontak
+          </span>
+          <span *ngIf="selectedShop.amenities.driveThru" class="facility-mini-tag">
+            🚗 Drive-Thru
+          </span>
+        </div>
+
+        <!-- Action CTAs -->
+        <div class="sheet-action-buttons">
+          <button
+            class="action-btn-primary route-btn"
+            (click)="openGoogleMaps(selectedShop, $event)"
+          >
+            <ion-icon name="open-outline"></ion-icon>
+            <span>Google Maps</span>
+          </button>
+
+          <button
+            class="action-btn-secondary detail-btn"
+            (click)="openDetailModal(selectedShop, $event)"
+          >
+            <ion-icon name="storefront-outline"></ion-icon>
+            <span>Menu & Info</span>
+          </button>
+
+          <button
+            class="action-btn-secondary copy-btn"
+            (click)="copyAddress(selectedShop.address, $event)"
+            title="Salin Alamat"
+          >
+            <ion-icon name="copy-outline"></ion-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nearby Carousel Peek (When no single shop is selected) -->
+    <div class="bottom-nearby-carousel-bar" *ngIf="!selectedShop && displayedShops.length > 0">
+      <div class="nearby-bar-title-row">
+        <span class="nearby-bar-label">
+          📍 Terdekat dari Lokasimu ({{ displayedShops.length }} Coffe Shop)
+        </span>
+        <button class="see-all-link" (click)="toggleView('list')">
+          Lihat Semua &rarr;
+        </button>
+      </div>
+
+      <div class="nearby-cards-slider no-scrollbar">
+        <div
+          *ngFor="let shop of displayedShops"
+          class="mini-shop-slide-card"
+          (click)="selectShop(shop, false); openDetailModal(shop, $event)"
+        >
+          <div class="mini-card-head">
+            <span
+              class="mini-brand-tag"
+              [style.background-color]="shop.brandColor"
+            >
+              {{ shop.brandLabel }}
+            </span>
+            <span class="mini-distance-pill">
+              {{ shop.distanceText }}
+            </span>
+          </div>
+
+          <h4 class="mini-card-title">{{ shop.name }}</h4>
+          <p class="mini-card-sub">{{ shop.district }}</p>
+
+          <div class="mini-card-footer">
+            <span class="mini-rating">
+              <ion-icon name="star" class="star-gold"></ion-icon>
+              {{ shop.rating }}
+            </span>
+            <span class="mini-time">{{ shop.walkingTimeText }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIST VIEW (When toggled to List) -->
+  <div class="list-view-container" *ngIf="activeView === 'list'">
+    <div class="list-summary-banner">
+      <div class="summary-left">
+        <h3 class="list-section-heading">Rekomendasi Coffee Shop</h3>
+        <p class="list-section-sub">
+          Diurutkan dari yang paling dekat dengan posisimu
+        </p>
+      </div>
+      <button class="back-to-map-btn" (click)="toggleView('map')">
+        <ion-icon name="map-outline"></ion-icon>
+        <span>Buka Peta</span>
+      </button>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-results-box" *ngIf="displayedShops.length === 0">
+      <div class="empty-icon">☕</div>
+      <h3>Tidak menemukan coffee shop</h3>
+      <p>Coba ubah kombinasi filter brand atau status operasional.</p>
+      <button class="reset-filter-btn" (click)="resetAllFilters()">
+        Reset Semua Filter
+      </button>
+    </div>
+
+    <!-- Shops Cards Feed -->
+    <div class="shop-list-feed">
+      <div
+        *ngFor="let shop of displayedShops"
+        class="feed-shop-card"
+        (click)="selectShop(shop); toggleView('map')"
+      >
+        <div class="feed-card-image-wrap">
+          <img [src]="shop.image" [alt]="shop.name" class="feed-card-img" />
+          <div
+            class="feed-card-brand-badge"
+            [style.background-color]="shop.brandColor"
+          >
+            {{ shop.brandLabel }}
+          </div>
+          <div class="feed-card-dist-badge">
+            {{ shop.distanceText }} ({{ shop.drivingTimeText }})
+          </div>
+        </div>
+
+        <div class="feed-card-body">
+          <div class="feed-title-row">
+            <h3 class="feed-shop-title">{{ shop.name }}</h3>
+            <div class="feed-rating-pill">
+              <ion-icon name="star" class="star-gold"></ion-icon>
+              <span>{{ shop.rating }}</span>
+            </div>
+          </div>
+
+          <p class="feed-address">{{ shop.address }}</p>
+
+          <div class="feed-meta-row">
+            <span class="feed-status-badge" [class.is-open]="shop.isOpen">
+              {{ shop.isOpen ? '🟢 Buka' : '🔴 Tutup' }} • {{ shop.openHours }}
+            </span>
+            <span class="feed-price">{{ shop.priceRange }}</span>
+          </div>
+
+          <!-- Promo notice -->
+          <div class="feed-promo-tag" *ngIf="shop.promo">
+            ⚡ {{ shop.promo }}
+          </div>
+
+          <!-- Signature drinks -->
+          <div class="feed-signatures-list">
+            <span class="sig-label">Favorit:</span>
+            <span
+              *ngFor="let sig of shop.signatures"
+              class="sig-badge"
+            >
+              {{ sig }}
+            </span>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="feed-card-actions">
+            <button
+              class="feed-btn-route"
+              (click)="openGoogleMaps(shop, $event)"
+            >
+              <ion-icon name="open-outline"></ion-icon>
+              <span>Maps</span>
+            </button>
+
+            <button
+              class="feed-btn-detail"
+              (click)="openDetailModal(shop, $event)"
+            >
+              <ion-icon name="storefront-outline"></ion-icon>
+              <span>Detail</span>
+            </button>
+
+            <button
+              class="feed-btn-map"
+              (click)="selectShop(shop); toggleView('map'); $event.stopPropagation()"
+            >
+              <ion-icon name="location-outline"></ion-icon>
+              <span>Peta</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DETAIL MODAL -->
+  <ion-modal [isOpen]="isDetailModalOpen" (didDismiss)="closeDetailModal()">
+    <ng-template>
+      <div class="modal-detail-wrapper" *ngIf="selectedShop">
+        <!-- Modal Header Image -->
+        <div class="modal-hero-cover">
+          <img [src]="selectedShop.image" [alt]="selectedShop.name" class="modal-cover-img" />
+          <div class="modal-cover-gradient"></div>
+
+          <button class="modal-close-icon-btn" (click)="closeDetailModal()">
+            <ion-icon name="close-outline"></ion-icon>
+          </button>
+
+          <div
+            class="modal-brand-pill"
+            [style.background-color]="selectedShop.brandColor"
+          >
+            <img [src]="getBrandLogo(selectedShop.brand)" [alt]="selectedShop.brandLabel" class="badge-brand-logo" />
+            <span>{{ selectedShop.brandLabel }}</span>
+          </div>
+
+          <div class="modal-hero-caption">
+            <h2>{{ selectedShop.name }}</h2>
+            <div class="modal-hero-sub">
+              <span>📍 {{ selectedShop.district }}</span>
+              <span>•</span>
+              <span>⭐ {{ selectedShop.rating }} ({{ selectedShop.reviewsCount | number }} ulasan)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Body Content -->
+        <div class="modal-scroll-body no-scrollbar">
+          <!-- Distance and Status Bar -->
+          <div class="modal-status-strip">
+            <div class="status-strip-col">
+              <span class="strip-label">Jarak Saat Ini</span>
+              <span class="strip-val font-bold">{{ selectedShop.distanceText }}</span>
+              <span class="strip-sub">{{ selectedShop.walkingTimeText }} • {{ selectedShop.drivingTimeText }}</span>
+            </div>
+            <div class="status-strip-divider"></div>
+            <div class="status-strip-col">
+              <span class="strip-label">Jam Operasional</span>
+              <span class="strip-val font-bold">{{ selectedShop.isOpen ? '🟢 Buka Sekarang' : '🔴 Sedang Tutup' }}</span>
+              <span class="strip-sub">{{ selectedShop.openHours }}</span>
+            </div>
+            <div class="status-strip-divider"></div>
+            <div class="status-strip-col">
+              <span class="strip-label">Estimasi Harga</span>
+              <span class="strip-val font-bold">{{ selectedShop.priceRange }}</span>
+              <span class="strip-sub">Affordable Coffee</span>
+            </div>
+          </div>
+
+          <!-- Promo Box -->
+          <div class="modal-promo-card" *ngIf="selectedShop.promo">
+            <div class="promo-icon-badge">⚡</div>
+            <div class="promo-content-text">
+              <span class="promo-badge-title">Promo Berlangsung</span>
+              <p>{{ selectedShop.promo }}</p>
+            </div>
+          </div>
+
+          <!-- Address & Navigation Card -->
+          <div class="modal-section-box">
+            <h4 class="section-box-title">Alamat & Kontak</h4>
+            <p class="section-box-desc">{{ selectedShop.address }}</p>
+            <p class="section-box-desc" *ngIf="selectedShop.phone" style="margin-top: 6px; color: #0277bd; font-weight: 600;">
+              📞 Telp: {{ selectedShop.phone }}
+            </p>
+
+            <div class="section-btn-row">
+              <button class="btn-copy-address" (click)="copyAddress(selectedShop.address, $event)">
+                <ion-icon name="copy-outline"></ion-icon>
+                <span>Salin Alamat</span>
+              </button>
+
+              <button class="btn-direct-maps" (click)="openGoogleMaps(selectedShop, $event)">
+                <ion-icon name="open-outline"></ion-icon>
+                <span>Buka di Google Maps</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Amenities / Facilities Grid -->
+          <div class="modal-section-box">
+            <h4 class="section-box-title">Fasilitas & Suasana</h4>
+            <div class="facilities-grid">
+              <div class="facility-item" [class.is-available]="selectedShop.amenities.wifi">
+                <ion-icon name="wifi-outline"></ion-icon>
+                <div class="fac-texts">
+                  <strong>Wi-Fi</strong>
+                  <span>{{ selectedShop.amenities.wifi ? (selectedShop.amenities.wifiSpeed || 'Tersedia') : 'Tidak Ada' }}</span>
+                </div>
+              </div>
+
+              <div class="facility-item" [class.is-available]="selectedShop.amenities.sockets">
+                <ion-icon name="flash-outline"></ion-icon>
+                <div class="fac-texts">
+                  <strong>Stopkontak</strong>
+                  <span>{{ selectedShop.amenities.sockets ? 'Banyak Colokan' : 'Terbatas' }}</span>
+                </div>
+              </div>
+
+              <div class="facility-item" [class.is-available]="selectedShop.amenities.ac">
+                <ion-icon name="snow-outline"></ion-icon>
+                <div class="fac-texts">
+                  <strong>Ruangan AC</strong>
+                  <span>{{ selectedShop.amenities.ac ? 'Indoor Dingin' : 'Non AC' }}</span>
+                </div>
+              </div>
+
+              <div class="facility-item" [class.is-available]="selectedShop.amenities.outdoor">
+                <ion-icon name="cafe-outline"></ion-icon>
+                <div class="fac-texts">
+                  <strong>Area Outdoor</strong>
+                  <span>{{ selectedShop.amenities.outdoor ? 'Smoking Area' : 'Indoor Saja' }}</span>
+                </div>
+              </div>
+
+              <div class="facility-item" [class.is-available]="selectedShop.amenities.parking">
+                <ion-icon name="car-outline"></ion-icon>
+                <div class="fac-texts">
+                  <strong>Tempat Parkir</strong>
+                  <span>{{ selectedShop.amenities.parking ? 'Motor & Mobil' : 'Parkir Jalan' }}</span>
+                </div>
+              </div>
+
+              <div class="facility-item" [class.is-available]="selectedShop.amenities.driveThru">
+                <ion-icon name="navigate-circle-outline"></ion-icon>
+                <div class="fac-texts">
+                  <strong>Drive-Thru</strong>
+                  <span>{{ selectedShop.amenities.driveThru ? 'Tersedia Cepat' : 'Dine-in/Takeaway' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Menu Unggulan & Harga -->
+          <div class="modal-section-box">
+            <h4 class="section-box-title">Menu Favorit & Rekomendasi</h4>
+            <div class="menu-items-list">
+              <div *ngFor="let item of selectedShop.menuHighlights" class="menu-item-row">
+                <div class="menu-item-left">
+                  <div class="menu-item-name-row">
+                    <span class="menu-name">{{ item.name }}</span>
+                    <span *ngIf="item.tag" class="menu-tag-pill">{{ item.tag }}</span>
+                  </div>
+                  <p class="menu-desc" *ngIf="item.description">{{ item.description }}</p>
+                </div>
+                <div class="menu-item-price">
+                  Rp {{ item.price | number }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Social / Phone -->
+          <div class="modal-section-box contact-section" *ngIf="selectedShop.phone || selectedShop.instagram">
+            <h4 class="section-box-title">Kontak & Media Sosial</h4>
+            <div class="contact-links-row">
+              <span *ngIf="selectedShop.instagram" class="contact-chip">
+                <ion-icon name="logo-instagram"></ion-icon>
+                <span>{{ selectedShop.instagram }}</span>
+              </span>
+              <span *ngIf="selectedShop.phone" class="contact-chip">
+                <ion-icon name="call-outline"></ion-icon>
+                <span>{{ selectedShop.phone }}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sticky Modal Footer -->
+        <div class="modal-sticky-footer">
+          <button class="footer-primary-route-btn" (click)="openGoogleMaps(selectedShop, $event)">
+            <ion-icon name="open-outline"></ion-icon>
+            <span>Buka Toko di Google Maps</span>
+          </button>
+        </div>
+      </div>
+    </ng-template>
+  </ion-modal>
+
+  <!-- Interactive Feedback Toast -->
+  <ion-toast
+    [isOpen]="isToastOpen"
+    [message]="toastMessage"
+    [duration]="2500"
+    (didDismiss)="isToastOpen = false"
+    position="bottom"
+  ></ion-toast>
 </ion-content>
